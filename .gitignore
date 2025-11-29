@@ -1,7 +1,16 @@
+# Diretórios de build e dependências
+node_modules/
+dist/
+build/
+
+# Arquivos de Lock e Configuração
 .env
-.node_modules
-dist
-build
+package-lock.json
+package.json # Corrigido: o nome correto é package.json
+
+# Arquivos do Sistema Operacional
 .DS_Store
-.package-lock.json
-package-json
+
+# Logs e Arquivos temporários (Opcional)
+*.log
+tmp/
