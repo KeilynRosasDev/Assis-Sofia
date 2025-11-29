@@ -1,0 +1,15 @@
+{
+  "name": "sofia-bot",
+  "version": "1.0.0",
+  "description": "Assistente virtual para WhatsApp",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js"
+  },
+  "dependencies": {
+    "whatsapp-web.js": "^1.23.0",
+    "mongoose": "^7.5.0",
+    "qrcode-terminal": "^0.12.0"
+  }
+}
