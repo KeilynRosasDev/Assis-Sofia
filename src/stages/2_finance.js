@@ -64,6 +64,7 @@ const financeStage = {
                 } else {
                     await client.sendMessage(from, "❌ Não foi encontrado nenhum boleto para sua matrícula.");
                 }
+                // colocar opção de voltar para o menu do boleto. 
                 
                 await client.sendMessage(from, "Posso te ajudar com mais alguma coisa no Financeiro?\n\n1. Voltar ao início.");
                 user.subStage = 'after_boleto';

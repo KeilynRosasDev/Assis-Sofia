@@ -46,7 +46,7 @@ const initialStage = {
         const userMessage = message.body ? message.body.trim() : '';
         
         if (user.stage === 0) {
-            await client.sendMessage(from, "Certo. Para eu poder buscar as informações da sua matrícula, por favor, me informe o número de matrícula.");
+            await client.sendMessage(from, "Oi para eu poder buscar as informações academicas para você, por favor, me informe o número de matrícula.");
             user.stage = 1;
             user.subStage = 'waiting_registration';
             await user.save();
