@@ -6,6 +6,7 @@ const academicStage = {
     async returnToMainMenu(from, client, user) {
         user.stage = 2;
         user.context.academicAttempts = 0;
+        user.context.postMenuAttempts = 0; // Resetar tentativas do pós-menu
         user.subStage = '';
         await user.save();
         await client.sendMessage(from,
@@ -20,6 +21,7 @@ const academicStage = {
 
     async returnToAcademicMenu(from, client, user) {
         user.context.academicAttempts = 0;
+        user.context.postMenuAttempts = 0;
         user.subStage = 'academic_menu';
         await user.save();
         await client.sendMessage(from,
@@ -55,22 +57,98 @@ const academicStage = {
         }
     },
 
+    async showPostMenuOptions(from, client, subStage) {
+        let message = "Se precisar de mais alguma informação ou quiser voltar ao menu, é só me chamar! 😉\n\n";
+        message += "1- Voltar ao menu de Aulas e provas\n";
+        message += "2- Sair";
+        
+        await client.sendMessage(from, message);
+        
+        // Armazenar o subStage para referência futura
+        return subStage;
+    },
+
+    async handleInvalidInput(from, client, user, context) {
+        // context: 'menu' para menu principal, 'post' para pós-menu
+        if (context === 'menu') {
+            user.context.academicAttempts += 1;
+            await user.save();
+            
+            if (user.context.academicAttempts === 1) {
+                await client.sendMessage(from,
+                    "🧐 Opa! Algo não bateu!\n" +
+                    "Calma, isso acontece! Parece que o número que você digitou não corresponde a nenhuma opção válida do nosso menu. 😕\n\n" +
+                    "Por favor, dê uma olhada nas opções disponíveis novamente e tente digitar apenas o número correspondente à sua escolha."
+                );
+                await this.returnToAcademicMenu(from, client, user);
+            } else if (user.context.academicAttempts === 2) {
+                await client.sendMessage(from,
+                    "🧐 Opa! Algo não bateu!\n" +
+                    "Calma, isso acontece! Parece que o número que você digitou não corresponde a nenhuma opção válida do nosso menu. 😕\n\n" +
+                    "⚠️ Importante: Se você digitar uma opção inválida novamente, por segurança, encerrarei sua sessão de forma automática para recomeçarmos do zero, ok?\n\n" +
+                    "Por favor, dê uma olhada nas opções disponíveis novamente e tente digitar apenas o número correspondente à sua escolha."
+                );
+                await this.returnToAcademicMenu(from, client, user);
+            } else if (user.context.academicAttempts >= 3) {
+                await client.sendMessage(from, "Sessão encerrada.");
+                await require('../models/User').deleteOne({ phone: from });
+            }
+        } else if (context === 'post') {
+            // Tratamento para opções inválidas no pós-menu
+            if (!user.context.postMenuAttempts) {
+                user.context.postMenuAttempts = 0;
+            }
+            
+            user.context.postMenuAttempts += 1;
+            await user.save();
+            
+            if (user.context.postMenuAttempts === 1) {
+                await client.sendMessage(from,
+                    "🧐 Opa! Algo não bateu!\n" +
+                    "Calma, isso acontece! Parece que o número que você digitou não corresponde a nenhuma opção válida. 😕\n\n" +
+                    "Por favor, escolha uma das opções abaixo:\n\n" +
+                    "1- Voltar ao menu de Aulas e provas\n" +
+                    "2- Sair"
+                );
+            } else if (user.context.postMenuAttempts === 2) {
+                await client.sendMessage(from,
+                    "🧐 Opa! Algo não bateu!\n" +
+                    "⚠️ Atenção: Se você digitar uma opção inválida novamente, por segurança, encerrarei sua sessão.\n\n" +
+                    "Por favor, escolha uma das opções válidas:\n\n" +
+                    "1- Voltar ao menu de Aulas e provas\n" +
+                    "2- Sair"
+                );
+            } else if (user.context.postMenuAttempts >= 3) {
+                await client.sendMessage(from, "Sessão encerrada.");
+                await require('../models/User').deleteOne({ phone: from });
+            }
+        }
+    },
+
     async execute({ from, message, client, user }) {
         const userMessage = message.body ? message.body.trim() : '';
         
-        if (!user.context.academicAttempts) {
+        // Inicializar contadores se não existirem
+        if (typeof user.context.academicAttempts === 'undefined') {
             user.context.academicAttempts = 0;
-            await user.save();
+        }
+        if (typeof user.context.postMenuAttempts === 'undefined') {
+            user.context.postMenuAttempts = 0;
         }
         
+        await user.save();
+        
+        // Se não tem subStage, mostrar menu acadêmico
         if (!user.subStage) {
             await this.returnToAcademicMenu(from, client, user);
             return;
         }
         
+        // Menu acadêmico principal
         if (user.subStage === 'academic_menu') {
             if (userMessage === '1') {
                 user.context.academicAttempts = 0;
+                user.context.postMenuAttempts = 0;
                 user.subStage = 'after_date';
                 await user.save();
                 
@@ -85,17 +163,16 @@ const academicStage = {
                 );
             } else if (userMessage === '2') {
                 user.context.academicAttempts = 0;
+                user.context.postMenuAttempts = 0;
                 user.subStage = 'after_calendar';
                 await user.save();
                 
-                // MENSAGEM CORRIGIDA: removido nome do curso
                 await client.sendMessage(from, "Pronto! Encontrei o Calendário Acadêmico.\nVocê pode baixar o PDF aqui:");
                 
                 const academicFolder = path.join(__dirname, '../../academicos');
                 const files = fs.readdirSync(academicFolder);
                 let filePath;
                 
-                // Procurar por CalendarioAcademico.pdf
                 for (const file of files) {
                     if (file.toLowerCase().includes('calendarioacademico') && file.toLowerCase().endsWith('.pdf')) {
                         filePath = path.join(academicFolder, file);
@@ -104,30 +181,24 @@ const academicStage = {
                 }
                 
                 if (!filePath) {
-                    // Se não encontrar, usar o caminho padrão
                     filePath = path.join(academicFolder, 'CalendarioAcademico.pdf');
                 }
                 
                 await this.sendFileIfExists(from, client, filePath, "Calendário Acadêmico [PDF]");
                 
-                await client.sendMessage(from,
-                    "Se precisar de mais alguma informação ou quiser voltar ao menu, é só me chamar! 😉\n\n" +
-                    "1- Voltar ao menu de Aulas e provas\n" +
-                    "2- Sair"
-                );
+                await this.showPostMenuOptions(from, client, 'after_calendar');
             } else if (userMessage === '3') {
                 user.context.academicAttempts = 0;
+                user.context.postMenuAttempts = 0;
                 user.subStage = 'after_aol';
                 await user.save();
                 
-                // MENSAGEM CORRIGIDA: especificando que é uma imagem
                 await client.sendMessage(from, "Pronto! Encontrei o Calendário das Atividades Online (AOL).\nVocê pode visualizar a imagem aqui:");
                 
                 const academicFolder = path.join(__dirname, '../../academicos');
                 const files = fs.readdirSync(academicFolder);
                 let filePath;
                 
-                // Procurar por CalendarioAOL (pode ser jpeg, jpg, png, etc)
                 for (const file of files) {
                     const lowerFile = file.toLowerCase();
                     if (lowerFile.includes('calendario') && lowerFile.includes('aol')) {
@@ -137,83 +208,58 @@ const academicStage = {
                 }
                 
                 if (!filePath) {
-                    // Se não encontrar, usar o caminho padrão
                     filePath = path.join(academicFolder, 'CalendarioAOL.jpeg');
                 }
                 
-                // Verificar extensão para saber se é imagem
                 const isImage = filePath.toLowerCase().match(/\.(jpeg|jpg|png|gif|bmp)$/);
                 await this.sendFileIfExists(from, client, filePath, "Calendário AOL", isImage);
                 
-                await client.sendMessage(from,
-                    "Se precisar de mais alguma informação ou quiser voltar ao menu, é só me chamar! 😉\n\n" +
-                    "1- Voltar ao menu de Aulas e provas\n" +
-                    "2- Sair"
-                );
+                await this.showPostMenuOptions(from, client, 'after_aol');
             } else if (userMessage === '4') {
                 await this.returnToMainMenu(from, client, user);
             } else if (userMessage === '5') {
                 await client.sendMessage(from, "Sessão encerrada. Até logo! 👋");
                 await require('../models/User').deleteOne({ phone: from });
             } else {
-                user.context.academicAttempts += 1;
-                await user.save();
+                // Opção inválida no menu principal
+                await this.handleInvalidInput(from, client, user, 'menu');
+            }
+            return;
+        }
+        
+        // Subestágios após mostrar conteúdo
+        const postStages = ['after_date', 'after_calendar', 'after_aol'];
+        if (postStages.includes(user.subStage)) {
+            if (userMessage === '1') {
+                user.context.postMenuAttempts = 0;
+                await this.returnToAcademicMenu(from, client, user);
+            } else if (userMessage === '2') {
+                await client.sendMessage(from, "Sessão encerrada. Até logo! 👋");
+                await require('../models/User').deleteOne({ phone: from });
+            } else {
+                // Opção inválida no pós-menu
+                await this.handleInvalidInput(from, client, user, 'post');
                 
-                if (user.context.academicAttempts === 1) {
+                // Reenviar as opções do pós-menu
+                if (user.subStage === 'after_date') {
                     await client.sendMessage(from,
-                        "🧐 Opa! Algo não bateu!\n" +
-                        "Calma, isso acontece! Parece que o número que você digitou não corresponde a nenhuma opção válida do nosso menu. 😕\n\n" +
-                        "Por favor, dê uma olhada nas opções disponíveis novamente e tente digitar apenas o número correspondente à sua escolha."
+                        "🎉 Lembre-se: A data final do semestre é 30/12/2025.\n\n" +
+                        "Escolha uma opção:\n\n" +
+                        "1- Voltar ao menu de Aulas e provas\n" +
+                        "2- Sair"
                     );
-                    await this.returnToAcademicMenu(from, client, user);
-                } else if (user.context.academicAttempts === 2) {
-                    await client.sendMessage(from,
-                        "🧐 Opa! Algo não bateu!\n" +
-                        "Calma, isso acontece! Parece que o número que você digitou não corresponde a nenhuma opção válida do nosso menu. 😕\n\n" +
-                        "⚠️ Importante: Se você digitar uma opção inválida novamente, por segurança, encerrarei sua sessão de forma automática para recomeçarmos do zero, ok?\n\n" +
-                        "Por favor, dê uma olhada nas opções disponíveis novamente e tente digitar apenas o número correspondente à sua escolha."
-                    );
-                    await this.returnToAcademicMenu(from, client, user);
-                } else if (user.context.academicAttempts >= 3) {
-                    await client.sendMessage(from, "Sessão encerrada.");
-                    await require('../models/User').deleteOne({ phone: from });
+                } else {
+                    await this.showPostMenuOptions(from, client, user.subStage);
                 }
             }
             return;
         }
         
-        // Tratamento após mostrar data
-        if (user.subStage === 'after_date') {
-            if (userMessage === '1') {
-                await this.returnToAcademicMenu(from, client, user);
-            } else if (userMessage === '2') {
-                await client.sendMessage(from, "Sessão encerrada. Até logo! 👋");
-                await require('../models/User').deleteOne({ phone: from });
-            }
-            return;
-        }
-        
-        // Tratamento após mostrar calendário
-        if (user.subStage === 'after_calendar') {
-            if (userMessage === '1') {
-                await this.returnToAcademicMenu(from, client, user);
-            } else if (userMessage === '2') {
-                await client.sendMessage(from, "Sessão encerrada. Até logo! 👋");
-                await require('../models/User').deleteOne({ phone: from });
-            }
-            return;
-        }
-        
-        // Tratamento após mostrar AOL
-        if (user.subStage === 'after_aol') {
-            if (userMessage === '1') {
-                await this.returnToAcademicMenu(from, client, user);
-            } else if (userMessage === '2') {
-                await client.sendMessage(from, "Sessão encerrada. Até logo! 👋");
-                await require('../models/User').deleteOne({ phone: from });
-            }
-            return;
-        }
+        // Se chegou aqui e não entrou em nenhum caso, resetar
+        console.warn(`SubStage não reconhecido: ${user.subStage}. Resetando.`);
+        user.subStage = '';
+        await user.save();
+        await this.returnToAcademicMenu(from, client, user);
     }
 };
 
