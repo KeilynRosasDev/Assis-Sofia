@@ -36,16 +36,45 @@ client.on('message', async (message) => {
         // Ignorar mensagens de grupos e status
         if (message.from.includes('@g.us') || message.from.includes('status')) return;
         
+        // Lista de saudações
+        const greetings = ['oi', 'olá', 'ola', 'ei', 'hey', 'hi', 'começar', 'iniciar', 'start', 'bom dia', 'boa tarde', 'boa noite'];
+        const normalizedMessage = body.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        
         // Buscar ou criar usuário
         let user = await User.findOne({ phone: from });
+        
+        // Se for saudação E o usuário existe com stage >= 2, deletar e recomeçar
+        if (greetings.includes(normalizedMessage) && user && user.stage >= 2) {
+            console.log(`🔄 Resetando sessão por saudação para: ${from}`);
+            await User.deleteOne({ phone: from });
+            user = null;
+        }
+        
         if (!user) {
-            user = new User({ phone: from, stage: 0 });
+            user = new User({ 
+                phone: from, 
+                stage: 0,
+                context: {
+                    attempts: 0,
+                    menuAttempts: 0,
+                    financeAttempts: 0,
+                    academicAttempts: 0
+                }
+            });
             await user.save();
         }
         
         // Atualizar última interação
         user.lastInteraction = new Date();
         await user.save();
+        
+        // Se o usuário estiver em stage > 4, resetar para 0
+        if (user.stage > 4) {
+            user.stage = 0;
+            user.context.attempts = 0;
+            user.context.menuAttempts = 0;
+            await user.save();
+        }
         
         // Roteamento por stage
         const context = { from, message, body, client, user };
@@ -65,6 +94,11 @@ client.on('message', async (message) => {
                 await academicStage.execute(context);
                 break;
             default:
+                // Reset se stage for inválido
+                user.stage = 0;
+                user.context.attempts = 0;
+                user.context.menuAttempts = 0;
+                await user.save();
                 await initialStage.execute(context);
         }
         
