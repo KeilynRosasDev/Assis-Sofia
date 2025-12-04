@@ -5,7 +5,9 @@ const AcademicData = require('../models/AcademicData');
 const initialStage = {
     async isValidRegistration(registration) {
         const validRegistrations = ["09038183", "09042272", "09042346"];
-        return validRegistrations.includes(registration);
+        // Limpar possíveis espaços ou caracteres especiais
+        const cleanReg = registration.replace(/\D/g, '');
+        return validRegistrations.includes(cleanReg);
     },
 
     async createUserData(registration) {
@@ -38,55 +40,82 @@ const initialStage = {
         }
     },
 
-    async showMainMenu(from, client) {
-        await client.sendMessage(from, "Certo, vamos falar sobre sua matrícula. Posso te ajudar com:\n\n1. Financeiro\n2. Minhas Aulas e Provas");
-    },
-
     async execute({ from, message, client, user }) {
         const userMessage = message.body ? message.body.trim() : '';
         
+        // Inicializar contexto se não existir
+        if (!user.context) {
+            user.context = {
+                attempts: 0,
+                menuAttempts: 0,
+                financeAttempts: 0,
+                academicAttempts: 0
+            };
+            await user.save();
+        }
+        
+        // Stage 0: MENSAGEM INICIAL DE BOAS-VINDAS
         if (user.stage === 0) {
-            await client.sendMessage(from, "Oi para eu poder buscar as informações academicas para você, por favor, me informe o número de matrícula.");
+            await client.sendMessage(from, "👋 Olá! Eu sou a Sofia, sua assistente virtual acadêmica.\nEstou aqui para ajudar você no que precisar!");
+            await client.sendMessage(from, "Para eu poder dar início a seu atendimento, por favor, me informe o número de matrícula.");
+            
             user.stage = 1;
-            user.subStage = 'waiting_registration';
+            user.context.attempts = 0;
             await user.save();
             return;
         }
         
-        if (user.stage === 1 && user.subStage === 'waiting_registration') {
+        // Stage 1: VALIDAÇÃO DA MATRÍCULA (NUNCA PULAR ESTA ETAPA)
+        if (user.stage === 1) {
             const registration = userMessage;
             
-            if (await this.isValidRegistration(registration)) {
-                user.registration = registration;
-                user.stage = 2;
-                user.subStage = '';
-                await user.save();
-                await this.createUserData(registration);
-                await this.showMainMenu(from, client);
-            } else {
-                await client.sendMessage(from, "Hum, não consegui encontrar essa matrícula. Por favor, verifique o número que me informou, pode ter uma pequena instabilidade no sistema da Instituição ou talvez o erro seja de digitação. Tente de novo. Pode digitar sua matrícula novamente, por favor?");
-                user.subStage = 'second_attempt';
-                await user.save();
+            // Verificar se é uma mensagem de saudação
+            const greetings = ['oi', 'olá', 'ola', 'ei', 'hey', 'hi', 'começar', 'iniciar'];
+            if (greetings.includes(userMessage.toLowerCase())) {
+                // Reenviar mensagem de boas-vindas e pedir matrícula novamente
+                await client.sendMessage(from, "👋 Olá novamente! Para começarmos, preciso do seu número de matrícula.");
+                await client.sendMessage(from, "Por favor, digite sua matrícula:");
+                return;
             }
-            return;
-        }
-        
-        if (user.stage === 1 && user.subStage === 'second_attempt') {
-            const registration = userMessage;
             
+            // Validar matrícula
             if (await this.isValidRegistration(registration)) {
                 user.registration = registration;
                 user.stage = 2;
-                user.subStage = '';
+                user.context.attempts = 0;
                 await user.save();
+                
                 await this.createUserData(registration);
-                await this.showMainMenu(from, client);
+                
+                // APENAS AQUI mostrar o menu inicial
+                await client.sendMessage(from, 
+                    "Menu Inicial\n\n" +
+                    "Que bom te ver por aqui! Para te ajudar da melhor forma, me diga: O que você gostaria de fazer hoje?\n\n" +
+                    "1️⃣ Financeiro💰\n\n" +
+                    "2️⃣ Minhas Aulas e Provas📚\n\n" +
+                    "3️⃣ Sair: Finalizar e encerrar a sua sessão. 👋\n\n" +
+                    "Qual opção te interessa? É só digitar o número! 😉"
+                );
             } else {
-                await client.sendMessage(from, "Que pena que sua matrícula realmente não está sendo usada. Não se preocupe! Isso pode ser uma instabilidade no sistema da Instituição ou apenas erro de digitação. Você irá transferir agora mesmo para um atendente humano que irá verificar o seu status, tudo bem por você?");
-                await client.sendMessage(from, "Transferência humana.");
-                user.stage = 0;
-                user.subStage = '';
+                user.context.attempts += 1;
                 await user.save();
+                
+                if (user.context.attempts === 1) {
+                    await client.sendMessage(from, 
+                        "😟 Ops! Matrícula não encontrada.\n" +
+                        "Tente novamente e confira se digitou todos os números corretamente."
+                    );
+                } else if (user.context.attempts === 2) {
+                    await client.sendMessage(from, 
+                        `😥 Ah, que pena! Não encontrei sua matrícula!\n` +
+                        `Puxa, parece que a matrícula ${registration} que você informou não está cadastrada ou foi digitada incorretamente. 😥\n\n` +
+                        `🚨 Atenção: Se você tentar digitar a matrícula novamente e ela ainda estiver incorreta, o sistema vai encerrar sua sessão automaticamente por segurança.\n\n` +
+                        `Por favor, verifique se você digitou todos os números certinhos agora. Qual número de matrícula você gostaria de tentar novamente? 🤔`
+                    );
+                } else if (user.context.attempts >= 3) {
+                    await client.sendMessage(from, "Sessão encerrada.");
+                    await User.deleteOne({ phone: from });
+                }
             }
             return;
         }
