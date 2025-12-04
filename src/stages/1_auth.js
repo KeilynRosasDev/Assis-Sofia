@@ -3,8 +3,46 @@ const academicStage = require('./3_academic');
 const User = require('../models/User');
 
 const authStage = {
+    // Função para normalizar texto
+    normalizeText(text) {
+        return text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+    },
+
     async execute({ from, message, client, user }) {
         const userMessage = message.body ? message.body.trim() : '';
+        const normalizedMessage = this.normalizeText(userMessage);
+        
+        // Lista de saudações
+        const greetings = [
+            'oi', 'ola', 'olá', 'ei', 'hey', 'hi', 'hello',
+            'bom dia', 'boa tarde', 'boa noite',
+            'olá!', 'bom dia!', 'boa tarde!', 'boa noite!',
+            'oii', 'oiii', 'oláa', 'olaaa'
+        ];
+        
+        // Se for saudação, responder adequadamente
+        if (greetings.includes(normalizedMessage)) {
+            let response = "👋 ";
+            if (normalizedMessage.includes('bom dia')) {
+                response = "🌅 Bom dia! ";
+            } else if (normalizedMessage.includes('boa tarde')) {
+                response = "🌇 Boa tarde! ";
+            } else if (normalizedMessage.includes('boa noite')) {
+                response = "🌃 Boa noite! ";
+            }
+            
+            response += "Estou aqui para te ajudar! Aqui está o menu novamente:\n\n";
+            
+            await client.sendMessage(from, response +
+                "Menu Inicial\n\n" +
+                "Que bom te ver por aqui! Para te ajudar da melhor forma, me diga: O que você gostaria de fazer hoje?\n\n" +
+                "1️⃣ Financeiro💰\n\n" +
+                "2️⃣ Minhas Aulas e Provas📚\n\n" +
+                "3️⃣ Sair: Finalizar e encerrar a sua sessão. 👋\n\n" +
+                "Qual opção te interessa? É só digitar o número! 😉"
+            );
+            return;
+        }
         
         // Se não tem matrícula, voltar para o início
         if (!user.registration) {
@@ -19,16 +57,12 @@ const authStage = {
             await user.save();
         }
         
-        console.log(`📊 Auth Stage - Opção: ${userMessage}, Tentativas: ${user.context.menuAttempts}`);
-        
         if (userMessage === '1') {
             user.context.menuAttempts = 0;
             user.stage = 3;
-            user.subStage = ''; // IMPORTANTE: Resetar subStage
+            user.subStage = '';
             await user.save();
             
-            // AGORA O menu financeiro será mostrado pelo financeStage
-            // Não enviar mensagem aqui, deixe o financeStage fazer isso
             return financeStage.execute({ from, message, client, user });
             
         } else if (userMessage === '2') {

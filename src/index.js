@@ -36,9 +36,50 @@ client.on('message', async (message) => {
         // Ignorar mensagens de grupos e status
         if (message.from.includes('@g.us') || message.from.includes('status')) return;
         
-        // Lista de saudações
-        const greetings = ['oi', 'olá', 'ola', 'ei', 'hey', 'hi', 'começar', 'iniciar', 'start', 'bom dia', 'boa tarde', 'boa noite'];
-        const normalizedMessage = body.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        // Lista completa de saudações (com normalização)
+        const normalizeText = (text) => text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+        const normalizedMessage = normalizeText(body);
+        
+        const greetings = [
+            // Saudações básicas
+            'oi', 'ola', 'olá', 'ei', 'hey', 'hi', 'hello', 'alo', 'alô',
+            'começar', 'iniciar', 'start', 'help', 'ajuda',
+            
+            // Bom dia em várias variações
+            'bom dia', 'bomdia', 'dia', 'bom-dia',
+            'bom dia!', 'bom dia.', 'bom dia?',
+            'bom diaa', 'bom diaaa', 'bom diaaaa',
+            'bom dia!', 'bom dia!!', 'bom dia!!!',
+            
+            // Boa tarde em várias variações
+            'boa tarde', 'boatarde', 'tarde', 'boa-tarde',
+            'boa tarde!', 'boa tarde.', 'boa tarde?',
+            'boa tardee', 'boa tardeee', 'boa tardeeee',
+            'boa tarde!', 'boa tarde!!', 'boa tarde!!!',
+            
+            // Boa noite em várias variações
+            'boa noite', 'boanoite', 'noite', 'boa-noite',
+            'boa noite!', 'boa noite.', 'boa noite?',
+            'boa noitee', 'boa noiteee', 'boa noiteeee',
+            'boa noite!', 'boa noite!!', 'boa noite!!!',
+            
+            // Saudações formais
+            'saudações', 'saudacoes', 'cumprimentos',
+            'saudação', 'saudacao', 'cumprimento',
+            
+            // Variações em maiúsculas (normalizadas para minúsculas)
+            'OI', 'OLÁ', 'OLA', 'BOM DIA', 'BOA TARDE', 'BOA NOITE',
+            'OLÁ!', 'BOM DIA!', 'BOA TARDE!', 'BOA NOITE!',
+            
+            // Variações com acentos diferentes
+            'oláa', 'oláá', 'olaaa', 'oii', 'oiii', 'oiiii',
+            
+            // Expressões de início
+            'vamos começar', 'começar agora', 'iniciar agora',
+            'pode começar', 'começar atendimento', 'iniciar atendimento',
+            'preciso de ajuda', 'quero ajuda', 'me ajuda',
+            'ajuda por favor', 'ajuda ai', 'ajuda aí'
+        ];
         
         // Buscar ou criar usuário
         let user = await User.findOne({ phone: from });
@@ -58,7 +99,8 @@ client.on('message', async (message) => {
                     attempts: 0,
                     menuAttempts: 0,
                     financeAttempts: 0,
-                    academicAttempts: 0
+                    academicAttempts: 0,
+                    postMenuAttempts: 0
                 }
             });
             await user.save();

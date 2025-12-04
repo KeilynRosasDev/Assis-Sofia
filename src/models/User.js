@@ -12,7 +12,8 @@ const userSchema = new mongoose.Schema({
             attempts: 0,
             menuAttempts: 0,
             financeAttempts: 0,
-            academicAttempts: 0
+            academicAttempts: 0,
+            postMenuAttempts: 0
         } 
     }
 });
